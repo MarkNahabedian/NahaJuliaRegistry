@@ -1,0 +1,5 @@
+name = "NahaJuliaRegistry"
+uuid = "78587dfa-9867-4c3c-97ad-3af041b9290a"
+description = "A registry of Mark Nahabedian's otherwise unregistered Julia packages."
+
+[packages]
