@@ -4,9 +4,22 @@ using Pkg
 using UUIDs: uuid4
 
 
+############################################################
 # Find packages in ~/.julia/dev that are remoted to GitHub:
 
 using GitHub
+
+#=
+Now this works:  GitHub.references(VL; auth=github_auth)
+
+function working_refertences(repo; auth)
+    refs, _ = GitHub.gh_get_paged_json(GitHub.DEFAULT_API,
+                                       "/repos/$(GitHub.name(VL))/git/refs";
+                                       auth=github_auth)
+    map(GitHub.Reference, refs)
+end
+=#
+
 using TOML
 import Base64
 
@@ -20,10 +33,17 @@ github_repos, _ =  GitHub.repos(github_me; auth=github_auth)
 # Map from GitHub.Repo to parsed Project.toml file:
 parsed_project_files = Dict{GitHub.Repo, Dict{String, Any}}()
 
+
+############################################################
 # Find my Julia projects on GitHub:
+
+# List my Julia repositories:
 map(
     filter(github_repos) do r
         try
+            if r.language != "Julia"
+                return false
+            end
             content_object = GitHub.file(r, "Project.toml"; auth=github_auth)
             @assert content_object.encoding == "base64"
             proj = TOML.parse(String(Base64.base64decode(content_object.content)))
@@ -36,7 +56,7 @@ map(
             false
         end
     end) do r
-        r.name
+        (r.name, r.fork)
     end
 
 # Cherry-picked from the above results:
@@ -44,12 +64,11 @@ packages = [
     "AnotherParser.jl"
     "DXFutils.jl"
     "NahaJuliaLib.jl"
+    "NativeSVG.jl"    # Not in above results because of missing compat section
     "PanelCutting.jl"
     "PlutoTool.jl"
-    "RegistryTools.jl"
     "ShaperOriginDesignLib"
-    "Unification.jl"
-    "UnitfulCurrency.jl"
+    # "Unification.jl"
     "VectorLogging.jl"
     # "WebBasedWorkspace"
 ]
@@ -66,13 +85,14 @@ function repoPackageSpec(repo::GitHub.Repo)
 end
 
 
+############################################################
 # Creating a registry file:
 
 Pkg.add("RegistryTools")
 using RegistryTools
 
 function ensure_registry()
-    registry_file = joinpath(@__DIR__, "Regsitry.toml")
+    registry_file = joinpath(@__DIR__, "Registry.toml")
     if isfile(registry_file)
         return registry_file
     end
@@ -88,6 +108,9 @@ end
 ensure_registry()
 
 
+############################################################
+# Make clean clones
+
 # LocalRegistry requires that each package have a clean checkout for
 # development.  I have no clue why it needs to modify the package.
 
@@ -96,12 +119,13 @@ ensure_registry()
 # active working copies in ~/.julia.dev, I need to create a directory
 # for package clones and clone the packages myself.
 
+const PACKAGE_STAGING_DIR = joinpath(@__DIR__, "package_staging")
+
 function package_staging_dir()
-    p = joinpath(@__DIR__, "package_staging")
-    if !isdir(p)
-        mkdir(p)
+    if !isdir(PACKAGE_STAGING_DIR)
+        mkdir(PACKAGE_STAGING_DIR)
     end
-    p
+    PACKAGE_STAGING_DIR
 end
 
 using URIs
@@ -133,8 +157,55 @@ end
 # map(mydevelop(cherry_picked_repos)
 
 
+object_types = Set()
+
+#=
+object_types
+Set{Any} with 2 elements:
+  "tag"
+  "commit"
+=#
+
+for repo in cherry_picked_repos
+    accept_types = ["tag"]
+    function objecttype(ref)
+        if haskey(ref.object, "type")
+            push!(object_types, ref.object["type"])
+            ref.object["type"]
+        else
+            nothing
+        end
+    end
+    local refs, _ = GitHub.references(repo; auth=github_auth)
+    println("$(repo.name): \t",
+            join(map(b -> b.ref,
+                     filter(refs) do r
+                         objecttype(r) in accept_types
+                     end),
+                 ", "))
+end
+
+
+############################################################
 # Registering packages:
 
-# Pkg.add("LocalRegistry")
-# using LocalRegistry
+Pkg.add("LocalRegistry")
+using LocalRegistry
 
+function repository_local_path(repo::GitHub.Repo)
+    joinpath(PACKAGE_STAGING_DIR, repoPackageSpec(repo).name)
+end
+
+function myregister(repo::GitHub.Repo)
+    local_dir = repository_local_path(repo)
+    @assert isdir(local_dir)
+    LocalRegistry.register(local_dir;
+                           registry=dirname(ensure_registry()),
+                           commit=false,
+                           push=false)
+end
+
+# How to keep LocalRegistry from creating first letter directories?
+# package_relpath(pkg_name::String) in RegistryTools/4DGZp/src/types.jl
+# is responsible for this.
+# I don't see a way to control it so I guess I'm struck with it.
