@@ -77,13 +77,6 @@ cherry_picked_repos = filter(github_repos) do r
     r.name in packages
 end
 
-function repoPackageSpec(repo::GitHub.Repo)
-    proj = parsed_project_files[repo]
-    PackageSpec(;name=proj["name"],
-                uuid=proj["uuid"],
-                url=repo.clone_url.uri)
-end
-
 
 ############################################################
 # Creating a registry file:
@@ -131,6 +124,19 @@ end
 using URIs
 # using GitHub   How to clone a repository?
 
+function repoPackageSpec(repo::GitHub.Repo)
+    proj = parsed_project_files[repo]
+    v = best_version(repo)
+    more = Dict()
+    if v != nothing
+        more[:rev] = v.object["sha"]
+    end
+    PackageSpec(;name=proj["name"],
+                uuid=proj["uuid"],
+                url=repo.clone_url.uri,
+                more...)
+end
+
 function mydevelop(repo::GitHub.Repo)
     staging = package_staging_dir()
     env = (
@@ -157,32 +163,79 @@ end
 # map(mydevelop(cherry_picked_repos)
 
 
-object_types = Set()
+############################################################
+# Choosing among reference versions
 
-#=
-object_types
-Set{Any} with 2 elements:
-  "tag"
-  "commit"
-=#
+ACCEPTABLE_OBJECT_TYPES = Set{String}([
+    "tag"
+])
+
+REJECTED_OBJECT_TYPES = Set{String}([
+])
+
+function objecttype(ref::GitHub.Reference)::String
+    if haskey(ref.object , "type")
+        ref.object["type"]
+    else
+        ""
+    end
+end
+
+function acceptable_object_type(ref::GitHub.Reference):Bool
+    acceptable_object_type(objecttype(ref))
+end
+
+function acceptable_object_type(ot::AbstractString)::Bool
+    @assert !('/' in ot)
+    if ot in ACCEPTABLE_OBJECT_TYPES
+        true
+    else
+        push!(REJECTED_OBJECT_TYPES, ot)
+        false
+    end
+end
+
+function ref_version(ref::GitHub.Reference)::VersionNumber
+    s = last(split(ref.ref, "/"))
+    try
+        VersionNumber(lstrip(s) do c
+                          isletter(c) || (c in ['-', '_'])
+                      end)
+    catch e
+        VersionNumber("0")
+    end
+end
+
+function best_version(repo::GitHub.Repo)
+    refs, _ = GitHub.references(repo; auth=github_auth)
+    versions = map(filter(acceptable_object_type, refs)
+                   ) do ref
+                       (ref, ref_version(ref))
+                   end
+    if length(versions) > 0
+        first(last(sort(versions; by=(v ->v[2]))))
+    else
+        nothing
+    end
+end
 
 for repo in cherry_picked_repos
-    accept_types = ["tag"]
-    function objecttype(ref)
-        if haskey(ref.object, "type")
-            push!(object_types, ref.object["type"])
-            ref.object["type"]
-        else
-            nothing
-        end
-    end
-    local refs, _ = GitHub.references(repo; auth=github_auth)
+    # local refs, _ = GitHub.references(repo; auth=github_auth)
     println("$(repo.name): \t",
+            #=
             join(map(b -> b.ref,
                      filter(refs) do r
                          objecttype(r) in accept_types
                      end),
-                 ", "))
+                 ", ")
+            =#
+            best_version(repo)
+            )
+end
+
+for repo in cherry_picked_repos
+    vpretty(ref) = ref === nothing ? nothing : ref.ref
+    println(repo.name, " \t", vpretty(best_version(repo)))
 end
 
 
