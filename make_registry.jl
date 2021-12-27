@@ -1,6 +1,14 @@
 # Make a private registry for my Julia packages.
 
 using Pkg
+
+# Something in here seems to mess up my general environment
+# The above seems to infect c:/Users/Mark Nahabedian/.julia/environments/v1.6/
+
+# So activate a temporary one to try to preven that:
+
+Pkg.activate(mktempdir())
+
 using UUIDs: uuid4
 
 
@@ -102,68 +110,6 @@ ensure_registry()
 
 
 ############################################################
-# Make clean clones
-
-# LocalRegistry requires that each package have a clean checkout for
-# development.  I have no clue why it needs to modify the package.
-
-# Pkg.develop would clone the repository for us, but there is noway to
-# temporarily override where it putrs the local copy.  Since I have
-# active working copies in ~/.julia.dev, I need to create a directory
-# for package clones and clone the packages myself.
-
-const PACKAGE_STAGING_DIR = joinpath(@__DIR__, "package_staging")
-
-function package_staging_dir()
-    if !isdir(PACKAGE_STAGING_DIR)
-        mkdir(PACKAGE_STAGING_DIR)
-    end
-    PACKAGE_STAGING_DIR
-end
-
-using URIs
-# using GitHub   How to clone a repository?
-
-function repoPackageSpec(repo::GitHub.Repo)
-    proj = parsed_project_files[repo]
-    v = best_version(repo)
-    more = Dict()
-    if v != nothing
-        more[:rev] = v.object["sha"]
-    end
-    PackageSpec(;name=proj["name"],
-                uuid=proj["uuid"],
-                url=repo.clone_url.uri,
-                more...)
-end
-
-function mydevelop(repo::GitHub.Repo)
-    staging = package_staging_dir()
-    env = (
-        "JULIA_PKG_DEVDIR" => staging,
-    )
-    u = repo.clone_url
-    runlist = [
-        "using Pkg",
-        "println(ENV[\"JULIA_PKG_DEVDIR\"], '\n', Pkg.devdir())",
-        "Pkg.develop(; url=\"$u\", shared=true)"
-    ]
-    p = run(pipeline(Cmd(Cmd(["julia",
-                              "-E", join(runlist, "; ")]);
-                         env=env,
-                         dir=staging),
-                     stdout=Base.stdout,
-                     stderr=Base.stderr,
-                     );
-            wait=true)
-    @assert p.exitcode == 0
-end
-
-
-# map(mydevelop(cherry_picked_repos)
-
-
-############################################################
 # Choosing among reference versions
 
 ACCEPTABLE_OBJECT_TYPES = Set{String}([
@@ -219,6 +165,7 @@ function best_version(repo::GitHub.Repo)
     end
 end
 
+println("\n\nBest versions of cherry_picked_repos:")
 for repo in cherry_picked_repos
     # local refs, _ = GitHub.references(repo; auth=github_auth)
     println("$(repo.name): \t",
@@ -237,6 +184,74 @@ for repo in cherry_picked_repos
     vpretty(ref) = ref === nothing ? nothing : ref.ref
     println(repo.name, " \t", vpretty(best_version(repo)))
 end
+
+
+############################################################
+# Make clean clones
+
+# LocalRegistry requires that each package have a clean checkout for
+# development.  I have no clue why it needs to modify the package.
+
+# Pkg.develop would clone the repository for us, but there is noway to
+# temporarily override where it putrs the local copy.  Since I have
+# active working copies in ~/.julia.dev, I need to create a directory
+# for package clones and clone the packages myself.
+
+const PACKAGE_STAGING_DIR = joinpath(@__DIR__, "package_staging")
+
+function package_staging_dir()
+    if !isdir(PACKAGE_STAGING_DIR)
+        mkdir(PACKAGE_STAGING_DIR)
+    end
+    PACKAGE_STAGING_DIR
+end
+
+function with_package_staging(f)
+    old = haskey(ENV, "JULIA_PKG_DEVDIR") ?
+        ENV["JULIA_PKG_DEVDIR"] :
+        nothing
+    try
+        ENV["JULIA_PKG_DEVDIR"]= package_staging_dir()
+        f()
+    finally
+        if old === nothing
+            delete!(ENV, "JULIA_PKG_DEVDIR")
+        else
+            ENV["JULIA_PKG_DEVDIR"] = old
+        end
+    end
+end
+
+
+using URIs
+
+function repoPackageSpec(repo::GitHub.Repo)
+    proj = parsed_project_files[repo]
+    v = best_version(repo)
+    more = Dict()
+    if v != nothing
+        more[:rev] = v.object["sha"]
+    end
+    PackageSpec(;name=proj["name"],
+                uuid=proj["uuid"],
+                url=repo.clone_url.uri,
+                more...)
+end
+
+function mydevelop(repo::GitHub.Repo)
+    with_package_staging() do
+        Pkg.develop(repoPackageSpec(repo))
+    end
+end
+
+# map(mydevelop, cherry_picked_repos)
+
+#=
+@ Pkg.API C:\buildbot\worker\package_win64\build\usr\share\julia\stdlib\v1.6\Pkg\src\API.jl:123
+deliverately errors if dev != nothing
+
+=#
+
 
 
 ############################################################
@@ -262,3 +277,4 @@ end
 # package_relpath(pkg_name::String) in RegistryTools/4DGZp/src/types.jl
 # is responsible for this.
 # I don't see a way to control it so I guess I'm struck with it.
+
