@@ -2,6 +2,11 @@
 
 This repository provides a Julia registry for my Julia projects.
 
+```
+Pkg.Registry.add(RegistrySpec(; url="https://github.com/MarkNahabedian/NahaJuliaRegistry.git"))
+```
+
+
 ## About
 
 This repository also includes the code I used to build this registry.
