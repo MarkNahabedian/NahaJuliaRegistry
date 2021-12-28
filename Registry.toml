@@ -1,5 +1,6 @@
 name = "NahaJuliaRegistry"
 uuid = "f265cae1-56e0-4651-a0c3-a5d97590ac84"
+repo = "https://github.com/MarkNahabedian/NahaJuliaRegistry.git"
 description = "A registry of Mark Nahabedian's otherwise unregistered Julia packages."
 
 [packages]

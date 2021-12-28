@@ -262,3 +262,6 @@ end
 # is responsible for this.
 # I don't see a way to control it so I guess I'm struck with it.
 
+### Pkg.Registry.add gets an error because the Registry.toml file
+### we create does not have a "repo" property.
+
