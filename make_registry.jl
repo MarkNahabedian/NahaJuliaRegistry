@@ -206,52 +206,21 @@ function package_staging_dir()
     PACKAGE_STAGING_DIR
 end
 
-function with_package_staging(f)
-    old = haskey(ENV, "JULIA_PKG_DEVDIR") ?
-        ENV["JULIA_PKG_DEVDIR"] :
-        nothing
-    try
-        ENV["JULIA_PKG_DEVDIR"]= package_staging_dir()
-        f()
-    finally
-        if old === nothing
-            delete!(ENV, "JULIA_PKG_DEVDIR")
-        else
-            ENV["JULIA_PKG_DEVDIR"] = old
-        end
-    end
-end
-
-
-using URIs
-
-function repoPackageSpec(repo::GitHub.Repo)
-    proj = parsed_project_files[repo]
+function clone(repo::GitHub.Repo)
     v = best_version(repo)
-    more = Dict()
-    if v != nothing
-        more[:rev] = v.object["sha"]
+    cmd = [ "git", "clone", "--verbose", ]
+    if v !== nothing
+        v = last(split(v.ref, "/"))
+        push!(cmd, "--branch")
+        push!(cmd, v)
     end
-    PackageSpec(;name=proj["name"],
-                uuid=proj["uuid"],
-                url=repo.clone_url.uri,
-                more...)
+    push!(cmd, repo.clone_url.uri)
+    proc = run(pipeline(Cmd(Cmd(cmd);
+                            dir=package_staging_dir());
+                        stdout=stdout, stderr=stderr);
+               wait=true)
+    @assert proc.exitcode == 0
 end
-
-function mydevelop(repo::GitHub.Repo)
-    with_package_staging() do
-        Pkg.develop(repoPackageSpec(repo))
-    end
-end
-
-# map(mydevelop, cherry_picked_repos)
-
-#=
-@ Pkg.API C:\buildbot\worker\package_win64\build\usr\share\julia\stdlib\v1.6\Pkg\src\API.jl:123
-deliverately errors if dev != nothing
-
-=#
-
 
 
 ############################################################
