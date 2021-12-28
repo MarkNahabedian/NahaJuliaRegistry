@@ -1,0 +1,13 @@
+name = "NahaJuliaRegistry"
+uuid = "f265cae1-56e0-4651-a0c3-a5d97590ac84"
+description = "A registry of Mark Nahabedian's otherwise unregistered Julia packages."
+
+[packages]
+2ebba909-c633-4b8c-b8fe-948aaf993ef9 = { name = "AnotherParser", path = "A/AnotherParser" }
+5f95e7b2-fe07-4078-b4a7-f744f426795c = { name = "NativeSVG", path = "N/NativeSVG" }
+919415d1-862b-4149-89fa-1b0f92b0b06b = { name = "ShaperOriginDesignLib", path = "S/ShaperOriginDesignLib" }
+9569be99-1faa-4e84-9751-444b87a7f9a0 = { name = "NahaJuliaLib", path = "N/NahaJuliaLib" }
+97956d6a-fbf6-4259-bb29-88c863285694 = { name = "DXFutils", path = "D/DXFutils" }
+c1372bff-64f3-4c29-a5fb-167619e966f3 = { name = "PanelCutting", path = "P/PanelCutting" }
+ec499083-3b8a-4310-a81e-8622934b14d2 = { name = "VectorLogging", path = "V/VectorLogging" }
+fd22e955-59d9-4d33-af65-18589d3615af = { name = "PlutoTool", path = "P/PlutoTool" }

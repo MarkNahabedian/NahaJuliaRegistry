@@ -1,0 +1,10 @@
+[0]
+DataStructures = "0.18"
+DisplayAs = "0.1"
+Match = "1"
+Plots = "1"
+Revise = "3"
+Unitful = "1.9.0-1"
+UnitfulUS = "0.1-0.2"
+VectorLogging = "0.1"
+julia = "1"

@@ -56,8 +56,8 @@ map(
             @assert content_object.encoding == "base64"
             proj = TOML.parse(String(Base64.base64decode(content_object.content)))
             # error if missing:
-            proj["compat"]["julia"]
             parsed_project_files[r] = proj
+            proj["compat"]["julia"]
             true
         catch e
             println("*** $(r.name): $e")
@@ -229,18 +229,33 @@ end
 Pkg.add("LocalRegistry")
 using LocalRegistry
 
+function repoPackageSpec(repo::GitHub.Repo)
+    proj = parsed_project_files[repo]
+    v = best_version(repo)
+    more = Dict()
+    if v != nothing
+        more[:rev] = v.object["sha"]
+    end
+    PackageSpec(;name=proj["name"],
+                uuid=proj["uuid"],
+                url=repo.clone_url.uri,
+                more...)
+end
+
 function repository_local_path(repo::GitHub.Repo)
-    joinpath(PACKAGE_STAGING_DIR, repoPackageSpec(repo).name)
+    joinpath(PACKAGE_STAGING_DIR, repo.name)
 end
 
 function myregister(repo::GitHub.Repo)
     local_dir = repository_local_path(repo)
-    @assert isdir(local_dir)
+    @assert(isdir(local_dir), local_dir)
     LocalRegistry.register(local_dir;
                            registry=dirname(ensure_registry()),
                            commit=false,
                            push=false)
 end
+
+# map(myregister, cherry_picked_repos)
 
 # How to keep LocalRegistry from creating first letter directories?
 # package_relpath(pkg_name::String) in RegistryTools/4DGZp/src/types.jl
